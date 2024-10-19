@@ -7,6 +7,7 @@
 # install.packages("loo")
 # install.packages("posterior")
 # install.packages("tidyr")
+# install.packages("patchwork")
 
 # Load in packages 
 
@@ -17,9 +18,10 @@ library(ggplot2)
 library(loo)
 library(posterior)
 library(tidyr)
+library(patchwork)
 
 # Load in raw data
-data <- read.csv("ewpw_chick_data_R_fixed.csv") 
+data <- read.csv("ewpw_chick_measurement_data.csv") 
 
 # Filter data to only include mass and tarsus measurements
 mass_tarsus_data <- data %>%
@@ -298,10 +300,10 @@ print(cv_data_frame)
 # Generate posterior predictions for the top 4 variables (CV less than 15%): mass, tarsus, humeral length, wing length
 
 # Load saved models if needed
-# fit_mass <- readRDS("fit_mass.rds")
-# fit_tarsus <- readRDS("fit_tarsus.rds")
-# fit_humeral_length <- readRDS("fit_humeral_length.rds")
-# fit_wing_length <- readRDS("fit_wing_length.rds")
+fit_mass <- readRDS("fit_mass.rds")
+fit_tarsus <- readRDS("fit_tarsus.rds")
+fit_humeral_length <- readRDS("fit_humeral_length.rds")
+fit_wing_length <- readRDS("fit_wing_length.rds")
 
 
 # Define a sequence of ages for prediction
@@ -479,6 +481,50 @@ max_growth_rate_df <- combined_growth_rate_summary %>%
 
 # Print the resulting data frame
 print(max_growth_rate_df)
+
+# Calculate mean growth rates for comaprison to other species in Table 2
+# Function to calculate the mean growth rate across all time points
+calculate_mean_growth_rate <- function(posterior_samples, time_points) {
+  growth_rate_samples <- sapply(time_points, function(t) {
+    apply(posterior_samples, 1, function(params) {
+      gompertz_derivative(t, params["a"], params["b"], params["c"])
+    })
+  })
+  
+  # Calculate the mean growth rate over the entire study period (mean of all time points)
+  mean_growth_rate <- rowMeans(growth_rate_samples)
+  return(mean_growth_rate)
+}
+
+# Set the time points (for example, days 1 to 15)
+time_points <- 1:15
+
+# Calculate the mean growth rate for each measurement
+mean_growth_rate_mass <- calculate_mean_growth_rate(posterior_samples_mass, time_points)
+mean_growth_rate_tarsus <- calculate_mean_growth_rate(posterior_samples_tarsus, time_points)
+mean_growth_rate_humeral_length <- calculate_mean_growth_rate(posterior_samples_humeral_length, time_points)
+mean_growth_rate_wing_length <- calculate_mean_growth_rate(posterior_samples_wing_length, time_points)
+
+# Summarize the results (mean and 95% credible intervals)
+summarize_mean_growth_rate <- function(mean_growth_rate) {
+  c(
+    Mean = mean(mean_growth_rate),
+    Lower_CI = quantile(mean_growth_rate, probs = 0.025),
+    Upper_CI = quantile(mean_growth_rate, probs = 0.975)
+  )
+}
+
+# Get the summarized mean growth rates for each measurement
+mean_growth_rate_summary_mass <- summarize_mean_growth_rate(mean_growth_rate_mass)
+mean_growth_rate_summary_tarsus <- summarize_mean_growth_rate(mean_growth_rate_tarsus)
+mean_growth_rate_summary_humeral_length <- summarize_mean_growth_rate(mean_growth_rate_humeral_length)
+mean_growth_rate_summary_wing_length <- summarize_mean_growth_rate(mean_growth_rate_wing_length)
+
+# Print the results
+print(mean_growth_rate_summary_mass)
+print(mean_growth_rate_summary_tarsus)
+print(mean_growth_rate_summary_humeral_length)
+print(mean_growth_rate_summary_wing_length)
 
 # Plot growth trajectories and growth rates for the top 4 variables
 
